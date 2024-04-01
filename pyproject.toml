@@ -1,0 +1,27 @@
+[tool.poetry]
+name = "trading-bot"
+version = "0.1.0"
+description = ""
+authors = ["alexey <a556077@icloud.com>"]
+readme = "README.md"
+
+
+[tool.poetry.dependencies]
+python = "^3.11"
+requests = "^2.31.0"
+websockets = "^12.0"
+python-binance = "^1.0.19"
+numpy = "^1.26.4"
+matplotlib = "^3.8.3"
+pandas = "^2.2.1"
+yfinance = "^0.2.37"
+celery = {extras = ["redis"], version = "^5.3.6"}
+pydantic-settings = "^2.2.1"
+sqlalchemy = "^2.0.28"
+alembic = "^1.13.1"
+psycopg = "^3.1.18"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

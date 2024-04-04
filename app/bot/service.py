@@ -1,7 +1,7 @@
 from typing import List, Optional
 from binance.client import Client
 import pandas
-from db.dal.future import FutureDAL, KlineDAL
+from db.dal.future import FutureDAL, KlineDAL, HistoryCorrelationDAL, PositionDAL
 import numpy
 import datetime
 import contextlib
@@ -13,7 +13,9 @@ def get_user_service(binance_client):
     with get_session() as session:
         future_dal = FutureDAL(session)#передавать при вызове
         kline_dal = KlineDAL(session)
-        yield FutureService(binance_client, future_dal, kline_dal)
+        history_correlation_dal = HistoryCorrelationDAL(session)
+        position_dal = PositionDAL(session)
+        yield FutureService(binance_client, future_dal, kline_dal, history_correlation_dal, position_dal)
 
 
 class FutureService:
@@ -22,24 +24,28 @@ class FutureService:
         binance_client: Client,
         future_dal: FutureDAL,
         kline_dal: KlineDAL,
+        history_correlation_dal: HistoryCorrelationDAL,
+        position_dal: PositionDAL
     ):
         self.binance_client = binance_client
         self.future_dal = future_dal
         self.kline_dal = kline_dal
+        self.history_correlation_dal = history_correlation_dal,
+        self.position_dal = position_dal
 
-    def save_klines(self, klines, symbol_id: int):
+    def save_klines(self, klines, symbol: str):
         for kline in klines:
             self.kline_dal.create_one(
-                symbol=symbol_id,
-                open=kline[1],
-                close=kline[4],
+                symbol=symbol,
+                open=float(kline[1]),
+                close=float(kline[4]),
                 open_time=datetime.datetime.utcfromtimestamp(
                     int(kline[0]) / 1000
                 ).strftime("%Y-%m-%d %H:%M:%S"),
                 close_time=datetime.datetime.utcfromtimestamp(
                     int(kline[6]) / 1000
                 ).strftime("%Y-%m-%d %H:%M:%S"),
-                qouto_asset_vol=kline[7],
+                qouto_asset_vol=int(float(kline[7])),
             )
 
     def get_symbol(self, **kwargs):
@@ -48,9 +54,26 @@ class FutureService:
     def save_symbol(self, **kwargs):
         self.future_dal.create_one(**kwargs)
 
-    def get_last_kline(self, symbol_id: int):
-        return self.kline_dal.get_last_record(symbol=symbol_id)
+    def get_or_create_pair(self, symbol, **kwargs):
+        return self.future_dal.get_or_create(kwargs, symbol = symbol)
 
+    def get_last_kline(self, symbol: str):
+        return self.kline_dal.get_last_record(symbol=symbol)
+
+
+    def update_pair(self, symbol, **kwargs):
+        return self.future_dal.update_one(kwargs, symbol = symbol)
+    
+    def get_all_pairs(self):
+        return self.future_dal.all()
+
+    def save_corellation(self, master_symbol, slave_symbol):
+        old_corr = self.history_correlation_dal.get_one_or_none(master_symbol = master_symbol, slave_symbol = slave_symbol) #(self.kline_dal.get_corellation(master_symbol, slave_symbol))
+        if not old_corr:
+            new_correlation = self.kline_dal.get_corellation(master_symbol, slave_symbol)
+            self.history_correlation_dal.create_one(master_symbol = master_symbol, slave_symbol = slave_symbol, corellation_coef = new_correlation)
+        else:
+            self.history_correlation_dal.update_one({'corellation_coef':new_correlation}, master_symbol = master_symbol, slave_symbol = slave_symbol)
     def get_all_usdt_futures_tickers(self):
         exchange_info = self.binance_client.futures_exchange_info()
 
@@ -84,26 +107,26 @@ class FutureService:
         df["volume"] = df["volume"].astype(float).astype(int)
         return df
 
-    def select_liquid_pairs(self, minimum_volume: int, interval: str, limit: int):
+    def select_liquid_pairs(self, minimum_volume: int):
         for symbol in self.get_all_usdt_futures_tickers():
-            klines = self.get_klines(symbol, interval, limit)  # обработать ошибку
-            df = self.get_dataframe(klines)
-            trading_volume = df["qouto_asset_vol"].sum()
-            if trading_volume > minimum_volume:
-                yield (symbol, df)
+            klines = self.get_klines(symbol=symbol, interval=self.binance_client.KLINE_INTERVAL_1HOUR, limit = 24)  # обработать ошибку
+            dayly_asset_volume = 0.0
+            for i in klines:
+                dayly_asset_volume += float(i[7])
+            dayly_asset_volume = int(dayly_asset_volume)
+            if dayly_asset_volume > minimum_volume:
+                yield (symbol, dayly_asset_volume)
 
     def get_klines(
         self,
         symbol: str,
-        bar_limit: Optional[int] = None,
-        start_timestamp=None,
-        end_timestamp=None,
+        interval = '1m',
+        **kwargs
     ):
         return self.binance_client.futures_klines(
             symbol=symbol,
-            interval="1m",
-            startTime=start_timestamp,
-            endTime=end_timestamp,
+            interval=interval,
+            **kwargs
         )
 
     def get_closes_time(self, klines: List[list]):

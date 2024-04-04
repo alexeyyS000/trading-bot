@@ -21,7 +21,7 @@ class SqlAlchemyRepository:
         self.session_factory.commit()
         return instance
 
-    def get_or_create(self, default, **kwargs):
+    def get_or_create(self, default:dict, **kwargs):
         instance = self.get_one_or_none(**kwargs)
         if instance is None:
             return (self.create_one(**(kwargs | default)), True)

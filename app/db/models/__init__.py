@@ -1,1 +1,1 @@
-from .binance_futures import Future, Kline, HistoryCorrelation, Position
+from .binance_futures import HistoryCorrelation, Kline, Position, Ticker

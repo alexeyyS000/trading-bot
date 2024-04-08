@@ -1,7 +1,9 @@
-from sqlalchemy.orm import Session
-from sqlalchemy import create_engine
-from .config import DatabaseSettings
 import contextlib
+
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
+
+from .config import DatabaseSettings
 
 
 @contextlib.contextmanager

@@ -1,5 +1,4 @@
-from sqlalchemy import select
-from sqlalchemy import update
+from sqlalchemy import select, update
 
 
 class SqlAlchemyRepository:
@@ -21,7 +20,7 @@ class SqlAlchemyRepository:
         self.session_factory.commit()
         return instance
 
-    def get_or_create(self, default:dict, **kwargs):
+    def get_or_create(self, default: dict, **kwargs):
         instance = self.get_one_or_none(**kwargs)
         if instance is None:
             return (self.create_one(**(kwargs | default)), True)
@@ -47,8 +46,20 @@ class SqlAlchemyRepository:
         self.session_factory.commit()
         return instance
 
+    def delete_several(self, **kwargs):
+        instance = self.filter(**kwargs)
+        if instance is None:
+            return None
+        self.session_factory.delete(instance)
+        self.session_factory.commit()
+        return instance
+
     def filter(self, **kwargs):
         self._base_query = self._base_query.filter_by(**kwargs)
+        return self
+
+    def filter2(self):
+        self._base_query = self._base_query.filter(self.Config.model.is_actual == True)
         return self
 
     def order_by(self, *args):

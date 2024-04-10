@@ -6,5 +6,5 @@ class BinanceSettings(BaseSettings):
     api_secret: str
 
     model_config = SettingsConfigDict(
-        env_prefix="db_", env_file=(".env", ".env.local"), extra="allow"
+        env_file=(".env", ".env.local"), extra="allow"
     )

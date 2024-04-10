@@ -169,13 +169,13 @@ class FutureService:
 
     def get_market_price(self, symbol: str):
         ticker = self.binance_client.get_symbol_ticker(symbol=symbol)
-        return int(ticker["price"])
+        return float(ticker["price"])
 
     def convert_dollar_to_quantity(self, usdt_amount: int, ticker_price: int):
         return usdt_amount / ticker_price
 
     def calculate_side(self, klines):
         if float(klines[0][4]) - float(klines[-1][4]) < 0:
-            return "SHORT"
+            return "SELL"
         else:
-            return "LONG"
+            return "BUY"

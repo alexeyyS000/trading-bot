@@ -59,7 +59,7 @@ class FutureService:
         )
 
     def get_position(self, symbol: str):
-        return self.position_dal.filter(symbol=symbol)
+        return self.position_dal.get_one_or_none(symbol=symbol)
 
     def get_symbol(self, **kwargs):
         return self.ticker_dal.get_one_or_none(**kwargs)
@@ -179,3 +179,27 @@ class FutureService:
             return "SELL"
         else:
             return "BUY"
+        
+    def save_position(self, instrument, current_trade_volume, last_short_term_corellation):
+        return self.position_dal.create_one(instrument= instrument, current_trade_volume= current_trade_volume, last_short_term_corellation = last_short_term_corellation)
+
+    def update_position(self, instrument: str, **kwargs):
+        return self.position_dal.update_one(kwargs, instrument=instrument)
+    
+    def get_history_correlation(self, slave_symbol):
+        return self.history_correlation_dal.get_one_or_none(slave_symbol= slave_symbol)
+    
+
+    def position_close(self, symbol):
+        # Получаем список открытых позиций для указанного символа
+        positions = self.binance_client.futures_position_information(symbol=symbol)
+
+        for position in positions:
+            if float(position['positionAmt']) != 0:
+                side = 'SELL' if float(position['positionAmt']) > 0 else 'BUY'
+                quantity = abs(float(position['positionAmt']))
+                try:
+                    order = self.binance_client.futures_create_order(symbol=symbol, side=side, type='MARKET', quantity=quantity)
+                    print(f"Market order closed for symbol {symbol}")
+                except Exception as e:
+                    print(f"Failed to close market order for symbol {symbol}: {e}")

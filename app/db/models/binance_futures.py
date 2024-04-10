@@ -63,7 +63,6 @@ class Position(Base):
     __tablename__ = "positions"
     id = Column(Integer, primary_key=True)
     instrument = Column(String, ForeignKey(Ticker.symbol))
-    last_short_term_corellations = Column(Integer)
-    position_additions_number = Column(Integer, nullable=False)
+    last_short_term_corellation = Column(Integer)
     current_trade_volume = Column(Float, nullable=False)
     created = Column(DateTime, default=datetime.utcnow)

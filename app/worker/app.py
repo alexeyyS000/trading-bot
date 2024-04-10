@@ -128,11 +128,30 @@ def open_position():
                 master_dataframe["close"].astype(float),
                 slave_dataframe["close"].astype(float),
             )
-
-            if corellation <= 0.3 and not service.get_position(symbol=pair.symbol):
+            position = service.get_position(symbol=pair.symbol)
+            if corellation <= 0.3 and not position:
                 price = service.get_market_price(pair.symbol)
                 quantity = service.convert_dollar_to_quantity(
                     strategy_settings.position_volume_in_usd, price
                 )
                 side = service.calculate_side(slave_klines_short_term)
                 service.order_future(pair.symbol, quantity, side)
+                service.save_position(pair.symbol, quantity, corellation)
+
+                return
+
+            if position and position.last_short_term_corellation - corellation >= 10:
+                price = service.get_market_price(pair.symbol)
+                quantity = service.convert_dollar_to_quantity(
+                    strategy_settings.position_volume_in_usd, price
+                )
+                side = service.calculate_side(slave_klines_short_term)
+                if side := position.side:
+                    service.position_close(pair.symbol)
+                service.order_future(pair.symbol, quantity, side)
+                service.update_position(pair.symbol,current_trade_volume = position.current_trade_volume+quantity, last_short_term_corellation = corellation)
+
+                return
+            
+            if position and corellation >= service.get_history_correlation():
+                service.position_close(pair.symbol)

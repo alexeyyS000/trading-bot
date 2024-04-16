@@ -14,7 +14,9 @@ from db.dal.binance_futures import (HistoryCorrelationDAL, KlineDAL,
 @contextlib.contextmanager
 def get_future_service(binance_client: Client):
     with get_session() as session:
-        ticker_dal = TickerDAL(session)  # передавать при вызове
+        ticker_dal = TickerDAL(
+            session
+        )  # передавать при вызове, можно попробовать dependency-injector
         kline_dal = KlineDAL(session)
         history_correlation_dal = HistoryCorrelationDAL(session)
         position_dal = PositionDAL(session)
@@ -38,7 +40,9 @@ class FutureService:
         self.history_correlation_dal = history_correlation_dal
         self.position_dal = position_dal
 
-    def save_klines(self, klines: List[list], symbol: str):
+    def save_klines(
+        self, klines: List[list], symbol: str
+    ):  # https://docs.sqlalchemy.org/en/20/tutorial/data_insert.html сохранять одним запросом
         for kline in klines:
             self.kline_dal.create_one(
                 symbol=symbol,
@@ -46,9 +50,6 @@ class FutureService:
                 close=float(kline[4]),
                 open_time=datetime.datetime.utcfromtimestamp(
                     int(kline[0]) / 1000
-                ).strftime("%Y-%m-%d %H:%M:%S"),
-                close_time=datetime.datetime.utcfromtimestamp(
-                    int(kline[6]) / 1000
                 ).strftime("%Y-%m-%d %H:%M:%S"),
                 qouto_asset_vol=int(float(kline[7])),
             )
@@ -137,7 +138,8 @@ class FutureService:
                 symbol=symbol,
                 interval=self.binance_client.KLINE_INTERVAL_1HOUR,
                 limit=24,
-            )  # обработать ошибку
+            )
+
             dayly_asset_volume = 0.0
             for i in klines:
                 dayly_asset_volume += float(i[7])
@@ -171,35 +173,46 @@ class FutureService:
         ticker = self.binance_client.get_symbol_ticker(symbol=symbol)
         return float(ticker["price"])
 
-    def convert_dollar_to_quantity(self, usdt_amount: int, ticker_price: int):
+    def convert_dollar_to_quantity(
+        self, usdt_amount: int, ticker_price: int
+    ):  # https://binance-docs.github.io/apidocs/spot/en/#exchange-information обрезать лишние цифры после запятой
         return usdt_amount / ticker_price
 
     def calculate_side(self, klines):
-        if float(klines[0][4]) - float(klines[-1][4]) < 0:
+        if (
+            float(klines[0][4]) - float(klines[-1][4]) < 0
+        ):  # сделать более читаемым мб передавать дф или свечи сразу
             return "SELL"
         else:
             return "BUY"
-        
-    def save_position(self, instrument, current_trade_volume, last_short_term_corellation):
-        return self.position_dal.create_one(instrument= instrument, current_trade_volume= current_trade_volume, last_short_term_corellation = last_short_term_corellation)
+
+    def save_position(
+        self, instrument, current_trade_volume, last_short_term_corellation
+    ):
+        return self.position_dal.create_one(
+            instrument=instrument,
+            current_trade_volume=current_trade_volume,
+            last_short_term_corellation=last_short_term_corellation,
+        )
 
     def update_position(self, instrument: str, **kwargs):
         return self.position_dal.update_one(kwargs, instrument=instrument)
-    
+
     def get_history_correlation(self, slave_symbol):
-        return self.history_correlation_dal.get_one_or_none(slave_symbol= slave_symbol)
-    
+        return self.history_correlation_dal.get_one_or_none(slave_symbol=slave_symbol)
 
     def position_close(self, symbol):
-        # Получаем список открытых позиций для указанного символа
         positions = self.binance_client.futures_position_information(symbol=symbol)
 
         for position in positions:
-            if float(position['positionAmt']) != 0:
-                side = 'SELL' if float(position['positionAmt']) > 0 else 'BUY'
-                quantity = abs(float(position['positionAmt']))
+            if float(position["positionAmt"]) != 0:
+                side = (
+                    "SELL" if float(position["positionAmt"]) > 0 else "BUY"
+                )  # убрать хардкод
+                quantity = abs(float(position["positionAmt"]))
                 try:
-                    order = self.binance_client.futures_create_order(symbol=symbol, side=side, type='MARKET', quantity=quantity)
-                    print(f"Market order closed for symbol {symbol}")
+                    order = self.binance_client.futures_create_order(
+                        symbol=symbol, side=side, type="MARKET", quantity=quantity
+                    )
                 except Exception as e:
-                    print(f"Failed to close market order for symbol {symbol}: {e}")
+                    pass  # обработать ошибку в воркере  - сделать ретрай

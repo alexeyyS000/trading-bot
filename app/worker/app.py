@@ -14,9 +14,7 @@ from .config import WorkerSettings
 strategy_settings = StrategySettings()
 
 settings = WorkerSettings()
-app = Celery(
-    "tasks", backend="redis://localhost:6379/0", broker="redis://localhost:6379/1"
-)
+app = Celery("tasks")
 
 app.conf.beat_schedule = {
     "parse": {
@@ -28,15 +26,15 @@ app.conf.beat_schedule = {
         "schedule": crontab(
             minute="*/1440"
         ),  # каждые 24 часа обновляютя данные о ликвидности инструментов
-        "task": "app.open_position",
+        "task": "app.manage_position",
         "schedule": crontab(
             minute="*/15"
-        ),  # каждые 15 мин проверяется текущая корреляция и если она расходится с исторической открывается позиция на сведение
+        ),  # каждые 15 мин проверяется текущая корреляция и если она расходится с исторической открывается позиция на сведение, если позиция открыта - принимается решение о добавоение или фиксации
     },
 }
 
 
-@app.task(name="app.add")
+@app.task(name="app.add")  # обработать ошибки, прописать условия ретрая
 def add():
     binance_client = get_client()
     now_datetime = datetime.datetime.utcnow()
@@ -67,7 +65,7 @@ def add():
             for i in range(amount_of_requests):
                 start_timestamp = datetime_to_microtimestamp(
                     start_time, datetime.timedelta(hours=5, minutes=count)
-                )  # приходится всегда добавлять 5 часов, потому что всегда при переводе datetime в timestamp добавляется этот спред
+                )  # сделать поле времени в БД с timezoneInfo чтобы не добавлять 5 часов
                 end_timestamp = datetime_to_microtimestamp(
                     end_time, datetime.timedelta(hours=5, minutes=count)
                 )
@@ -78,9 +76,13 @@ def add():
                     startTime=start_timestamp,
                     endTime=end_timestamp,
                 )
-                service.save_klines(klines, ticker.symbol)  # обернуть в транзакцию
+
+                service.save_klines(
+                    klines, ticker.symbol
+                )  # обернуть в транзакцию коммитить ее после всех циклов,
 
                 count += strategy_settings.klines_in_one_query
+
             if ticker.symbol != strategy_settings.master_symbol:
                 service.recalculate_corellation(
                     strategy_settings.master_symbol,
@@ -103,8 +105,8 @@ def update_liquidity_data():
                 service.update_pair(ticker.symbol, daily_volume=daily_volume)
 
 
-@app.task(name="app.open_position")
-def open_position():
+@app.task(name="app.manage_position")
+def manage_position():
     binance_client = get_client()
     with get_future_service(binance_client) as service:
         actual_pairs = service.filter_actual_tickers()
@@ -135,7 +137,10 @@ def open_position():
                     strategy_settings.position_volume_in_usd, price
                 )
                 side = service.calculate_side(slave_klines_short_term)
-                service.order_future(pair.symbol, quantity, side)
+                try:
+                    service.order_future(pair.symbol, quantity, side)
+                except:
+                    return  # тут тоже не забыть про ретраи
                 service.save_position(pair.symbol, quantity, corellation)
 
                 return
@@ -149,9 +154,13 @@ def open_position():
                 if side := position.side:
                     service.position_close(pair.symbol)
                 service.order_future(pair.symbol, quantity, side)
-                service.update_position(pair.symbol,current_trade_volume = position.current_trade_volume+quantity, last_short_term_corellation = corellation)
+                service.update_position(
+                    pair.symbol,
+                    current_trade_volume=position.current_trade_volume + quantity,
+                    last_short_term_corellation=corellation,
+                )
 
                 return
-            
+
             if position and corellation >= service.get_history_correlation():
                 service.position_close(pair.symbol)

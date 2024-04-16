@@ -41,10 +41,8 @@ class Kline(Base):
     __tablename__ = "klines"
     id = Column(Integer, primary_key=True)
     symbol = Column(String, ForeignKey(Ticker.symbol))
-    open = Column(Float, nullable=False)
     close = Column(Float, nullable=False)
-    open_time = Column(DateTime, nullable=False)
-    close_time = Column(DateTime, nullable=False)
+    open_time = Column(DateTime(True), nullable=False)
     qouto_asset_vol = Column(Integer, nullable=False)
     created = Column(DateTime, default=datetime.utcnow)
 

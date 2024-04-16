@@ -1,1 +1,1 @@
-trading bot correlation recovery
+The trading bot works on the principle of returning the current correlation of an instrument to the its historical correlation to msater_symbol

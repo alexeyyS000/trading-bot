@@ -110,7 +110,7 @@ def manage_position():
     binance_client = get_client()
     with get_future_service(binance_client) as service:
         actual_pairs = service.filter_actual_tickers()
-        master_klines_short_term = service.get_klines(
+        master_klines_short_term = service.get_klines(# не выбрасывать эти свечи, сохранять к историческим если таймфрейм совпадает
             strategy_settings.master_symbol,
             binance_client.KLINE_INTERVAL_1MINUTE,
             limit=strategy_settings.slave_bar_limit,

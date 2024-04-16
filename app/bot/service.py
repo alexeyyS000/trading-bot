@@ -181,7 +181,7 @@ class FutureService:
     def calculate_side(self, klines):
         if (
             float(klines[0][4]) - float(klines[-1][4]) < 0
-        ):  # сделать более читаемым мб передавать дф или свечи сразу
+        ):  # сделать более читаемым мб передавать дф или свечи сразу, еще можно считать вектор более отчно другим алгоритмом
             return "SELL"
         else:
             return "BUY"

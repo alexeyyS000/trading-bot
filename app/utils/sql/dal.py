@@ -1,5 +1,6 @@
-from sqlalchemy import select, update
 from typing import List
+
+from sqlalchemy import select, update
 
 
 class SqlAlchemyRepository:

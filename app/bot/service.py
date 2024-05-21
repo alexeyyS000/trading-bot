@@ -5,19 +5,14 @@ from typing import List, Optional
 import numpy
 import pandas
 from binance.client import Client
-from db.client import session_factory
-from db.dal.binance_futures import (
-    HistoryCorrelationDAL,
-    KlineDAL,
-    PositionDAL,
-    TickerDAL,
-)
 
+from db.client import session_factory
+from db.dal.binance_futures import (HistoryCorrelationDAL, KlineDAL,
+                                    PositionDAL, TickerDAL)
 
 
 @contextlib.contextmanager
 def get_future_service(binance_client: Client):
-    
     ticker_dal = TickerDAL(session_factory)
     kline_dal = KlineDAL(session_factory)
     history_correlation_dal = HistoryCorrelationDAL(session_factory)
@@ -158,9 +153,7 @@ class FutureService:
         )
 
     def get_klines_from_db(self, symbol: str):
-        return self.kline_dal.filter(
-            symbol=symbol
-        ).all()
+        return self.kline_dal.filter(symbol=symbol).all()
 
     def calculate_short_term_correlation(
         self, master_closes_prices: list, slave_closes_prices: list
@@ -187,9 +180,7 @@ class FutureService:
         return usdt_amount / ticker_price
 
     def calculate_side(self, klines):
-        if (
-            float(klines[0][4]) - float(klines[-1][4]) < 0
-        ):
+        if float(klines[0][4]) - float(klines[-1][4]) < 0:
             return self.binance_client.SIDE_SELL
         else:
             return self.binance_client.SIDE_BUY
@@ -220,11 +211,10 @@ class FutureService:
                     else self.binance_client.SIDE_BUY
                 )
                 quantity = abs(float(position["positionAmt"]))
-                
+
                 order = self.binance_client.futures_create_order(
                     symbol=symbol,
                     side=side,
                     type=self.binance_client.ORDER_TYPE_MARKET,
                     quantity=quantity,
                 )
-

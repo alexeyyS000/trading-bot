@@ -1,15 +1,15 @@
 import datetime
 import math
 
+import pytz
 from celery import Celery
 from celery.schedules import crontab
-import pytz
 from dependency_injector.wiring import inject
+
 from bot.client import get_client
 from bot.parameters import StrategySettings
 from bot.service import get_future_service
 from utils.general import datetime_to_microtimestamp
-
 
 strategy_settings = StrategySettings()
 
@@ -78,9 +78,7 @@ def add():
                     endTime=end_timestamp,
                 )
 
-                service.save_klines(
-                    klines, ticker.symbol
-                )
+                service.save_klines(klines, ticker.symbol)
 
                 count += strategy_settings.klines_in_one_query
 

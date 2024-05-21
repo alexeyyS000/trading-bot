@@ -1,16 +1,7 @@
 from datetime import datetime, timedelta
 
-from sqlalchemy import (
-    BigInteger,
-    Column,
-    DateTime,
-    Float,
-    ForeignKey,
-    Integer,
-    String,
-    case,
-    func,
-)
+from sqlalchemy import (BigInteger, Column, DateTime, Float, ForeignKey,
+                        Integer, String, case, func)
 from sqlalchemy.dialects.postgresql import INTERVAL
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.sql.functions import concat

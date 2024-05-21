@@ -5,24 +5,26 @@ from typing import List, Optional
 import numpy
 import pandas
 from binance.client import Client
+from db.client import session_factory
+from db.dal.binance_futures import (
+    HistoryCorrelationDAL,
+    KlineDAL,
+    PositionDAL,
+    TickerDAL,
+)
 
-from db.client import get_session
-from db.dal.binance_futures import (HistoryCorrelationDAL, KlineDAL,
-                                    PositionDAL, TickerDAL)
 
 
 @contextlib.contextmanager
 def get_future_service(binance_client: Client):
-    with get_session() as session:
-        ticker_dal = TickerDAL(
-            session
-        )  # передавать при вызове, можно попробовать dependency-injector
-        kline_dal = KlineDAL(session)
-        history_correlation_dal = HistoryCorrelationDAL(session)
-        position_dal = PositionDAL(session)
-        yield FutureService(
-            binance_client, ticker_dal, kline_dal, history_correlation_dal, position_dal
-        )
+    
+    ticker_dal = TickerDAL(session_factory)
+    kline_dal = KlineDAL(session_factory)
+    history_correlation_dal = HistoryCorrelationDAL(session_factory)
+    position_dal = PositionDAL(session_factory)
+    yield FutureService(
+        binance_client, ticker_dal, kline_dal, history_correlation_dal, position_dal
+    )
 
 
 class FutureService:
@@ -40,19 +42,22 @@ class FutureService:
         self.history_correlation_dal = history_correlation_dal
         self.position_dal = position_dal
 
-    def save_klines(
-        self, klines: List[list], symbol: str
-    ):  # https://docs.sqlalchemy.org/en/20/tutorial/data_insert.html сохранять одним запросом
-        for kline in klines:
-            self.kline_dal.create_one(
-                symbol=symbol,
-                open=float(kline[1]),
-                close=float(kline[4]),
-                open_time=datetime.datetime.utcfromtimestamp(
+    def save_klines(self, klines: List[list], symbol: str):
+        klines = [
+            {
+                "symbol": symbol,
+                "open": float(kline[1]),
+                "close": float(kline[4]),
+                "high": float(kline[2]),
+                "low": float(kline[3]),
+                "open_time": datetime.datetime.utcfromtimestamp(
                     int(kline[0]) / 1000
                 ).strftime("%Y-%m-%d %H:%M:%S"),
-                qouto_asset_vol=int(float(kline[7])),
-            )
+                "qouto_asset_vol": int(float(kline[7])),
+            }
+            for kline in klines
+        ]
+        return self.kline_dal.create_some(klines)
 
     def filter_actual_tickers(self):
         return self.history_correlation_dal.get_objects_by_slavesymbols(
@@ -152,6 +157,11 @@ class FutureService:
             symbol=symbol, interval=interval, **kwargs
         )
 
+    def get_klines_from_db(self, symbol: str):
+        return self.kline_dal.filter(
+            symbol=symbol
+        ).all()
+
     def calculate_short_term_correlation(
         self, master_closes_prices: list, slave_closes_prices: list
     ):
@@ -163,7 +173,7 @@ class FutureService:
         order = self.binance_client.futures_create_order(
             symbol=symbol,
             side=side,
-            type="MARKET",
+            type=self.binance_client.ORDER_TYPE_MARKET,
             quantity=quantity,
             leverage=leverage,
         )
@@ -173,18 +183,16 @@ class FutureService:
         ticker = self.binance_client.get_symbol_ticker(symbol=symbol)
         return float(ticker["price"])
 
-    def convert_dollar_to_quantity(
-        self, usdt_amount: int, ticker_price: int
-    ):  # https://binance-docs.github.io/apidocs/spot/en/#exchange-information обрезать лишние цифры после запятой
+    def convert_dollar_to_quantity(self, usdt_amount: int, ticker_price: float):
         return usdt_amount / ticker_price
 
     def calculate_side(self, klines):
         if (
             float(klines[0][4]) - float(klines[-1][4]) < 0
-        ):  # сделать более читаемым мб передавать дф или свечи сразу, еще можно считать вектор более отчно другим алгоритмом
-            return "SELL"
+        ):
+            return self.binance_client.SIDE_SELL
         else:
-            return "BUY"
+            return self.binance_client.SIDE_BUY
 
     def save_position(
         self, instrument, current_trade_volume, last_short_term_corellation
@@ -207,12 +215,16 @@ class FutureService:
         for position in positions:
             if float(position["positionAmt"]) != 0:
                 side = (
-                    "SELL" if float(position["positionAmt"]) > 0 else "BUY"
-                )  # убрать хардкод
+                    self.binance_client.SIDE_SELL
+                    if float(position["positionAmt"]) > 0
+                    else self.binance_client.SIDE_BUY
+                )
                 quantity = abs(float(position["positionAmt"]))
-                try:
-                    order = self.binance_client.futures_create_order(
-                        symbol=symbol, side=side, type="MARKET", quantity=quantity
-                    )
-                except Exception as e:
-                    pass  # обработать ошибку в воркере  - сделать ретрай
+                
+                order = self.binance_client.futures_create_order(
+                    symbol=symbol,
+                    side=side,
+                    type=self.binance_client.ORDER_TYPE_MARKET,
+                    quantity=quantity,
+                )
+

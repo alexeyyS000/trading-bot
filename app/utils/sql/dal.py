@@ -1,4 +1,5 @@
 from sqlalchemy import select, update
+from typing import List
 
 
 class SqlAlchemyRepository:
@@ -10,15 +11,24 @@ class SqlAlchemyRepository:
         self._base_query = select(self.Config.model)
 
     def get_one_or_none(self, **kwargs):
-        stmt = select(self.Config.model).filter_by(**kwargs)
-        result = self.session_factory.execute(stmt)
-        return result.scalar_one_or_none()
+        with self.session_factory() as session:
+            stmt = select(self.Config.model).filter_by(**kwargs)
+            result = session.execute(stmt)
+            return result.scalar_one_or_none()
 
     def create_one(self, **kwargs):
-        instance = self.Config.model(**kwargs)
-        self.session_factory.add(instance)
-        self.session_factory.commit()
-        return instance
+        with self.session_factory() as session:
+            instance = self.Config.model(**kwargs)
+            session.add(instance)
+            session.commit()
+            return instance
+
+    def create_some(self, elements: List[dict]):
+        with self.session_factory() as session:
+            objects = [self.Config.model(**element) for element in elements]
+            session.bulk_save_objects(objects)
+            session.commit()
+            return objects
 
     def get_or_create(self, default: dict, **kwargs):
         instance = self.get_one_or_none(**kwargs)
@@ -28,38 +38,37 @@ class SqlAlchemyRepository:
             return (instance, False)
 
     def update_one(self, attrs: dict, **kwargs):
-        stmt = (
-            update(self.Config.model)
-            .filter_by(**kwargs)
-            .values(**attrs)
-            .returning(self.Config.model)
-        )
-        result = self.session_factory.execute(stmt)
-        self.session_factory.commit()
-        return result.scalar_one_or_none()
+        with self.session_factory() as session:
+            stmt = (
+                update(self.Config.model)
+                .filter_by(**kwargs)
+                .values(**attrs)
+                .returning(self.Config.model)
+            )
+            result = session.execute(stmt)
+            session.commit()
+            return result.scalar_one_or_none()
 
     def delete_one(self, **kwargs):
-        instance = self.get_one_or_none(**kwargs)
-        if instance is None:
-            return None
-        self.session_factory.delete(instance)
-        self.session_factory.commit()
-        return instance
+        with self.session_factory() as session:
+            instance = self.get_one_or_none(**kwargs)
+            if instance is None:
+                return None
+            session.delete(instance)
+            session.commit()
+            return instance
 
     def delete_several(self, **kwargs):
-        instance = self.filter(**kwargs)
-        if instance is None:
-            return None
-        self.session_factory.delete(instance)
-        self.session_factory.commit()
-        return instance
+        with self.session_factory() as session:
+            instance = self.filter(**kwargs)
+            if instance is None:
+                return None
+            session.delete(instance)
+            session.commit()
+            return instance
 
     def filter(self, **kwargs):
         self._base_query = self._base_query.filter_by(**kwargs)
-        return self
-
-    def filter2(self):
-        self._base_query = self._base_query.filter(self.Config.model.is_actual == True)
         return self
 
     def order_by(self, *args):
@@ -71,12 +80,14 @@ class SqlAlchemyRepository:
         return self
 
     def first(self):
-        result = self.session_factory.execute(self._base_query)
-        return result.scalar_one_or_none()
+        with self.session_factory() as session:
+            result = session.execute(self._base_query)
+            return result.scalar_one_or_none()
 
     def all(self):
-        result = self.session_factory.execute(self._base_query)
-        return result.scalars().all()
+        with self.session_factory() as session:
+            result = session.execute(self._base_query)
+            return result.scalars().all()
 
     def base(self, query):
         self._base_query = query
@@ -86,5 +97,6 @@ class SqlAlchemyRepository:
         return self._base_query
 
     def delete_all(self):
-        self.session_factory.query(self.Config.model).delete()
-        self.session_factory.commit()
+        with self.session_factory() as session:
+            session.query(self.Config.model).delete()
+            session.commit()

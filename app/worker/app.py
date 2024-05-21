@@ -3,17 +3,17 @@ import math
 
 from celery import Celery
 from celery.schedules import crontab
-
+import pytz
+from dependency_injector.wiring import inject
 from bot.client import get_client
 from bot.parameters import StrategySettings
 from bot.service import get_future_service
 from utils.general import datetime_to_microtimestamp
 
-from .config import WorkerSettings
 
 strategy_settings = StrategySettings()
 
-settings = WorkerSettings()
+
 app = Celery("tasks")
 
 app.conf.beat_schedule = {
@@ -30,14 +30,17 @@ app.conf.beat_schedule = {
         "schedule": crontab(
             minute="*/15"
         ),  # каждые 15 мин проверяется текущая корреляция и если она расходится с исторической открывается позиция на сведение, если позиция открыта - принимается решение о добавоение или фиксации
+        "task": "app.test",
+        "schedule": crontab(minute="*/1"),
     },
 }
 
 
-@app.task(name="app.add")  # обработать ошибки, прописать условия ретрая
+@app.task(name="app.add")
+@inject
 def add():
     binance_client = get_client()
-    now_datetime = datetime.datetime.utcnow()
+    now_datetime = datetime.datetime.utcnow().replace(tzinfo=pytz.utc)
     with get_future_service(binance_client) as service:
         tickers = service.get_all_pairs()
         for ticker in tickers:
@@ -50,8 +53,6 @@ def add():
             else:
                 since_last_update = now_datetime - last_record.open_time
                 start_time = last_record.open_time + datetime.timedelta(minutes=1)
-            if since_last_update <= datetime.timedelta(hours=4):
-                continue
 
             amount_of_requests = math.ceil(
                 since_last_update.total_seconds()
@@ -64,10 +65,10 @@ def add():
             count = 0
             for i in range(amount_of_requests):
                 start_timestamp = datetime_to_microtimestamp(
-                    start_time, datetime.timedelta(hours=5, minutes=count)
-                )  # сделать поле времени в БД с timezoneInfo чтобы не добавлять 5 часов
+                    start_time, datetime.timedelta(minutes=count)
+                )
                 end_timestamp = datetime_to_microtimestamp(
-                    end_time, datetime.timedelta(hours=5, minutes=count)
+                    end_time, datetime.timedelta(minutes=count)
                 )
 
                 klines = service.get_klines(
@@ -79,7 +80,7 @@ def add():
 
                 service.save_klines(
                     klines, ticker.symbol
-                )  # обернуть в транзакцию коммитить ее после всех циклов,
+                )
 
                 count += strategy_settings.klines_in_one_query
 
@@ -110,7 +111,7 @@ def manage_position():
     binance_client = get_client()
     with get_future_service(binance_client) as service:
         actual_pairs = service.filter_actual_tickers()
-        master_klines_short_term = service.get_klines(# не выбрасывать эти свечи, сохранять к историческим если таймфрейм совпадает
+        master_klines_short_term = service.get_klines(
             strategy_settings.master_symbol,
             binance_client.KLINE_INTERVAL_1MINUTE,
             limit=strategy_settings.slave_bar_limit,
@@ -140,7 +141,7 @@ def manage_position():
                 try:
                     service.order_future(pair.symbol, quantity, side)
                 except:
-                    return  # тут тоже не забыть про ретраи
+                    return
                 service.save_position(pair.symbol, quantity, corellation)
 
                 return

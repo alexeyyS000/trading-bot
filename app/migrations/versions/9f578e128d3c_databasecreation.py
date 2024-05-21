@@ -1,15 +1,16 @@
 """databasecreation
 
-Revision ID: b535c851fc52
+Revision ID: 9f578e128d3c
 Revises: 
-Create Date: 2024-04-14 15:31:16.607239
+Create Date: 2024-04-20 01:06:04.045469
 
 """
-import sqlalchemy as sa
 from alembic import op
+import sqlalchemy as sa
+
 
 # revision identifiers, used by Alembic.
-revision = "b535c851fc52"
+revision = "9f578e128d3c"
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -21,8 +22,8 @@ def upgrade() -> None:
         "tickers",
         sa.Column("symbol", sa.String(), nullable=False),
         sa.Column("daily_volume", sa.BigInteger(), nullable=True),
-        sa.Column("created", sa.DateTime(), nullable=True),
-        sa.Column("updated", sa.DateTime(), nullable=True),
+        sa.Column("created", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("updated", sa.DateTime(timezone=True), nullable=True),
         sa.PrimaryKeyConstraint("symbol"),
     )
     op.create_table(
@@ -31,8 +32,8 @@ def upgrade() -> None:
         sa.Column("master_symbol", sa.String(), nullable=True),
         sa.Column("slave_symbol", sa.String(), nullable=True),
         sa.Column("corellation_coef", sa.Float(), nullable=False),
-        sa.Column("created", sa.DateTime(), nullable=True),
-        sa.Column("updated", sa.DateTime(), nullable=True),
+        sa.Column("created", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("updated", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(
             ["master_symbol"],
             ["tickers.symbol"],
@@ -47,10 +48,13 @@ def upgrade() -> None:
         "klines",
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("symbol", sa.String(), nullable=True),
+        sa.Column("open", sa.Float(), nullable=False),
         sa.Column("close", sa.Float(), nullable=False),
-        sa.Column("open_time", sa.DateTime(), nullable=False),
+        sa.Column("high", sa.Float(), nullable=False),
+        sa.Column("low", sa.Float(), nullable=False),
+        sa.Column("open_time", sa.DateTime(timezone=True), nullable=False),
         sa.Column("qouto_asset_vol", sa.Integer(), nullable=False),
-        sa.Column("created", sa.DateTime(), nullable=True),
+        sa.Column("created", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(
             ["symbol"],
             ["tickers.symbol"],
@@ -63,7 +67,7 @@ def upgrade() -> None:
         sa.Column("instrument", sa.String(), nullable=True),
         sa.Column("last_short_term_corellation", sa.Integer(), nullable=True),
         sa.Column("current_trade_volume", sa.Float(), nullable=False),
-        sa.Column("created", sa.DateTime(), nullable=True),
+        sa.Column("created", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(
             ["instrument"],
             ["tickers.symbol"],

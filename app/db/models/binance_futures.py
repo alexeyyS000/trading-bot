@@ -1,7 +1,16 @@
 from datetime import datetime, timedelta
 
-from sqlalchemy import (BigInteger, Column, DateTime, Float, ForeignKey,
-                        Integer, String, case, func)
+from sqlalchemy import (
+    BigInteger,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    case,
+    func,
+)
 from sqlalchemy.dialects.postgresql import INTERVAL
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.sql.functions import concat
@@ -13,8 +22,8 @@ class Ticker(Base):
     __tablename__ = "tickers"
     symbol = Column(String, primary_key=True)
     daily_volume = Column(BigInteger, nullable=True)
-    created = Column(DateTime, default=datetime.utcnow)
-    updated = Column(DateTime, onupdate=datetime.utcnow)
+    created = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated = Column(DateTime(timezone=True), onupdate=datetime.utcnow)
 
     @hybrid_property
     def is_actual(self):
@@ -41,10 +50,13 @@ class Kline(Base):
     __tablename__ = "klines"
     id = Column(Integer, primary_key=True)
     symbol = Column(String, ForeignKey(Ticker.symbol))
+    open = Column(Float, nullable=False)
     close = Column(Float, nullable=False)
-    open_time = Column(DateTime(True), nullable=False)
+    high = Column(Float, nullable=False)
+    low = Column(Float, nullable=False)
+    open_time = Column(DateTime(timezone=True), nullable=False)
     qouto_asset_vol = Column(Integer, nullable=False)
-    created = Column(DateTime, default=datetime.utcnow)
+    created = Column(DateTime(timezone=True), default=datetime.utcnow)
 
 
 class HistoryCorrelation(Base):
@@ -53,8 +65,8 @@ class HistoryCorrelation(Base):
     master_symbol = Column(String, ForeignKey(Ticker.symbol))
     slave_symbol = Column(String, ForeignKey(Ticker.symbol))
     corellation_coef = Column(Float, nullable=False)
-    created = Column(DateTime, default=datetime.utcnow)
-    updated = Column(DateTime, onupdate=datetime.utcnow)
+    created = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated = Column(DateTime(timezone=True), onupdate=datetime.utcnow)
 
 
 class Position(Base):
@@ -63,4 +75,4 @@ class Position(Base):
     instrument = Column(String, ForeignKey(Ticker.symbol))
     last_short_term_corellation = Column(Integer)
     current_trade_volume = Column(Float, nullable=False)
-    created = Column(DateTime, default=datetime.utcnow)
+    created = Column(DateTime(timezone=True), default=datetime.utcnow)

@@ -6,5 +6,5 @@ class WorkerSettings(BaseSettings):
     celery_result_backend: str
 
     model_config = SettingsConfigDict(
-        env_prefix="db_", env_file=(".env", ".env.local"), extra="allow"
+        env_prefix="db_", env_file=(".env"), extra="allow"
     )

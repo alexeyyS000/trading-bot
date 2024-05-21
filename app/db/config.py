@@ -9,9 +9,7 @@ class DatabaseSettings(BaseSettings):
 
     @property
     def url(self):
-        return (
-            f"postgresql+psycopg://{self.user}:{self.password}@{self.host}/{self.name}"
-        )
+        return f"postgresql+psycopg://{self.user}:{self.password}@{self.host}/{self.name}"
 
     model_config = SettingsConfigDict(
         env_prefix="db_", env_file=(".env"), extra="allow"

@@ -1,6 +1,5 @@
-from datetime import datetime, timedelta
-
-from sqlalchemy import and_, func, or_, select
+import pandas as pd
+from sqlalchemy import func, select
 
 from db.models import HistoryCorrelation, Kline, Position, Ticker
 from utils.sql.dal import SqlAlchemyRepository
@@ -17,6 +16,13 @@ class TickerDAL(SqlAlchemyRepository):
 class KlineDAL(SqlAlchemyRepository):
     class Config:
         model = Kline
+
+    def get_dataframe(self, symbol):
+        with self.session_factory() as session:
+            return pd.read_sql(
+                select(self.Config.model).filter(self.Config.model.symbol == symbol),
+                session.bind,
+            )
 
     def get_corellation(self, master_symbol: str, slave_symbol: str, limit: int):
         subquery1 = (
@@ -48,11 +54,10 @@ class KlineDAL(SqlAlchemyRepository):
         ).select_from(
             subquery1.join(subquery2, subquery1.c.row_number == subquery2.c.row_number)
         )
-
-        result = self.session_factory.execute(correlation)
-        correlation_value = result.scalar_one_or_none()
-
-        return correlation_value
+        with self.session_factory() as session:
+            result = session.execute(correlation)
+            correlation_value = result.scalar_one_or_none()
+            return correlation_value
 
     def get_last_record(self, **kwargs):
         stmt = (
@@ -61,9 +66,10 @@ class KlineDAL(SqlAlchemyRepository):
             .order_by(self.Config.model.open_time.desc())
             .limit(1)
         )
-        result = self.session_factory.execute(stmt)
-        result = result.scalar_one_or_none()
-        return result
+        with self.session_factory() as session:
+            result = session.execute(stmt)
+            result = result.scalar_one_or_none()
+            return result
 
 
 class HistoryCorrelationDAL(SqlAlchemyRepository):
@@ -74,8 +80,9 @@ class HistoryCorrelationDAL(SqlAlchemyRepository):
         stmt = select(self.Config.model).filter(
             self.Config.model.slave_symbol.in_(symbols)
         )
-        result = self.session_factory.execute(stmt)
-        return result.all()
+        with self.session_factory() as session:
+            result = session.execute(stmt)
+            return result.all()
 
 
 class PositionDAL(SqlAlchemyRepository):

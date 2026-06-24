@@ -15,5 +15,4 @@ An algorithmic trading system based on the concept of an instrument's correlatio
 * Built a service for collecting, processing, and storing market data;
 * Implemented trading signal generation logic based on correlation deviations;
 * Developed automated order execution functionality;
-* Integrated data storage and caching using PostgreSQL and Redis;
 * Containerized the application with Docker for simplified deployment and scalability.
